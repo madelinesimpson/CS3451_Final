@@ -15,6 +15,10 @@
 #include <string>
 #include <cmath>
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 #ifndef __Main_cpp__
 #define __Main_cpp__
 
@@ -99,37 +103,41 @@ public:
         return building;
     }
 
-    // creating the ground
-    OpenGLTriangleMesh* Create_Ground_Plane(float width, float length, float height)
+    // creating the ground (making it slanted to cover up building bottoms)
+    OpenGLTriangleMesh* Create_Ground_Plane(float width, float length, float A, float B, float C, int nx = 80, int nz = 80)
     {
         std::vector<Vector3> vertices;
         std::vector<Vector3i> elements;
         std::vector<Vector2> uvs;
 
-        // slant upwards
-        float halfW = width / 2.0f;
+        float halfW = width * 0.5f;
+        float dx = width / nx;
+        float dz = length / nz;
 
-        // fronte dge (lower)
-        vertices.push_back(Vector3(-halfW, 0.0f, 0.0f));
-        vertices.push_back(Vector3(halfW, 0.0f, 0.0f));
+        for (int iz = 0; iz <= nz; iz++) {
+            float z = -iz * dz;
+            for (int ix = 0; ix <= nx; ix++) {
+                float x = -halfW + ix * dx;
+                float y = A * x + B * z + C;
+                vertices.push_back(Vector3(x, y, z));
+                uvs.push_back(Vector2((float)ix / nx, (float)iz / nz * 5.0f));
+            }
+        }
 
-        // back edge (higher)
-        vertices.push_back(Vector3(-halfW, height, -length));
-        vertices.push_back(Vector3(halfW, height, -length));
-
-        // uvs
-        uvs.push_back(Vector2(0.0f, 0.0f));
-        uvs.push_back(Vector2(1.0f, 0.0f));
-        uvs.push_back(Vector2(0.0f, 5.0f));
-        uvs.push_back(Vector2(1.0f, 5.0f));
-
-        elements.push_back(Vector3i(0, 1, 2));
-        elements.push_back(Vector3i(1, 3, 2));
+        for (int iz = 0; iz < nz; iz++) {
+            for (int ix = 0; ix < nx; ix++) {
+                int i0 = iz * (nx + 1) + ix;
+                int i1 = i0 + 1;
+                int i2 = i0 + (nx + 1);
+                int i3 = i2 + 1;
+                elements.push_back(Vector3i(i0, i1, i2));
+                elements.push_back(Vector3i(i1, i3, i2));
+            }
+        }
 
         auto mesh = Add_Tri_Mesh_Object(vertices, elements);
         mesh->mesh.Uvs() = uvs;
         return mesh;
-
     }
 
     // procedurally generate sphere mesh
@@ -141,11 +149,11 @@ public:
 
         // generate vertices
         for (int i = 0; i <= stacks; ++i) {
-            float v   = (float)i / (float)stacks;
+            float v = (float)i / (float)stacks;
             float phi = v * M_PI;
 
             for (int j = 0; j <= slices; ++j) {
-                float u   = (float)j / (float)slices;
+                float u = (float)j / (float)slices;
                 float theta = u * 2.0f * M_PI;
 
                 float x = radius * sinf(phi) * cosf(theta);
@@ -175,10 +183,10 @@ public:
 
         // put it in world
         Matrix4f t;
-        t << 1,0,0,center[0],
-            0,1,0,center[1],
-            0,0,1,center[2],
-            0,0,0,1;
+        t << 1, 0, 0, center[0],
+            0, 1, 0, center[1],
+            0, 0, 1, center[2],
+            0, 0, 0, 1;
         sphere->Set_Model_Matrix(t);
 
         return sphere;
@@ -228,10 +236,10 @@ public:
 
         // put in world
         Matrix4f T;
-        T << 1,0,0,baseCenter[0],
-            0,1,0,baseCenter[1],
-            0,0,1,baseCenter[2],
-            0,0,0,1;
+        T << 1, 0, 0, baseCenter[0],
+            0, 1, 0, baseCenter[1],
+            0, 0, 1, baseCenter[2],
+            0, 0, 0, 1;
         cyl->Set_Model_Matrix(T);
 
         return cyl;
@@ -244,12 +252,17 @@ public:
         //// Load shaders
         OpenGLShaderLibrary::Instance()->Add_Shader_From_File("shaders/basic.vert", "shaders/basic.frag", "basic");
         OpenGLShaderLibrary::Instance()->Add_Shader_From_File("shaders/building.vert", "shaders/building.frag", "building");
-        //OpenGLShaderLibrary::Instance()->Add_Shader_From_File("shaders/street.vert", "shaders/street.frag", "street");
+        OpenGLShaderLibrary::Instance()->Add_Shader_From_File("shaders/street.vert", "shaders/street.frag", "street");
         OpenGLShaderLibrary::Instance()->Add_Shader_From_File("shaders/basic.vert", "shaders/ball.frag", "ball");
         OpenGLShaderLibrary::Instance()->Add_Shader_From_File("shaders/basic.vert", "shaders/pole.frag", "pole");
 
         //// Load textures
         OpenGLTextureLibrary::Instance()->Add_Texture_From_File("tex/star.png", "star_color");
+
+        // lots of lights for ball drop
+        opengl_window->Add_Light(Vector3f(0.0f, 8.0f, 0.0f), Vector3f(0.1f, 0.1f, 0.1f), Vector3f(2.0f, 2.0f, 2.0f), Vector3f(1.0f, 1.0f, 1.0f));
+        opengl_window->Add_Light(Vector3f(0.0f, 5.0f, -3.0f), Vector3f(0.0f, 0.0f, 0.0f), Vector3f(0.8f, 0.0f, 0.8f), Vector3f(0.8f, 0.5f, 0.8f));
+
 
         // background - dark gradient
         {
@@ -261,11 +274,11 @@ public:
         // making ground
         {
             //ground = Create_Ground_Plane(30.0f);  // 30 units 
-            ground = Create_Ground_Plane(15.0f, 60.0f, 4.0f);
+            ground = Create_Ground_Plane(15.0f, 60.0f, 0.0f, -0.067f, 0.0f, 120, 120);
 
             Matrix4f t;
             t << 1.0f, 0.0f, 0.0f, 0.0f,
-                0.0f, 1.0f, 0.0f, -5.0f,
+                0.0f, 1.0f, 0.0f, -2.0f,
                 0.0f, 0.0f, 1.0f, 10.0f,
                 0.0f, 0.0f, 0.0f, 1.0f;
             ground->Set_Model_Matrix(t);
@@ -276,7 +289,7 @@ public:
             ground->Set_Ks(Vector3f(0.05f, 0.05f, 0.05f));
             ground->Set_Shininess(8.0f);
 
-            ground->Add_Shader_Program(OpenGLShaderLibrary::Get_Shader("basic"));
+            ground->Add_Shader_Program(OpenGLShaderLibrary::Get_Shader("street"));
         }
 
         //making the buildings
@@ -342,7 +355,7 @@ public:
             float poleRadius = 0.15f;
             float poleHeight = 4.0f;
 
-            pole = Create_Cylinder(poleRadius, poleHeight, 40, Vector3f(0.0f, -3.0f, -5.0f));
+            pole = Create_Cylinder(poleRadius, poleHeight, 40, Vector3f(0.0f, -1.0f, -10.0f));
 
             pole->Set_Ka(Vector3f(0.08f, 0.08f, 0.08f));
             pole->Set_Kd(Vector3f(0.7f, 0.7f, 0.75f));
@@ -357,7 +370,7 @@ public:
         {
             float ballRadius = 1.2f;
 
-            ball = Create_Sphere(ballRadius, 40, 40, Vector3f(0.0f, 2.1f, -5.0f));
+            ball = Create_Sphere(ballRadius, 40, 40, Vector3f(0.0f, 3.9f, -10.0f));
 
             ball->Set_Ka(Vector3f(0.5f, 0.5f, 0.5f));
             ball->Set_Kd(Vector3f(0.9f, 0.9f, 0.9f));
@@ -408,6 +421,32 @@ public:
     virtual void Toggle_Next_Frame()
     {
         float time = GLfloat(clock() - startTime) / CLOCKS_PER_SEC;
+
+        // ball drop
+        if (ball) {
+            float dropTime = 5.0f;
+            float cycle = std::fmod(time, dropTime + 2.0f);
+
+            float y_pos;
+            if (cycle < dropTime) {
+                // drop
+                float normalizedTime = cycle / dropTime;
+                float easeOut = 1.0f - pow(1.0f - normalizedTime, 3.0f);
+                y_pos = 3.9f - (easeOut * 3.4f);
+            }
+            else {
+                // reset to top
+                y_pos = 3.9f;
+            }
+
+            Matrix4f t;
+            t << 1.0f, 0.0f, 0.0f, 0.0f,
+                0.0f, 1.0f, 0.0f, y_pos,
+                0.0f, 0.0f, 1.0f, -10.0f,
+                0.0f, 0.0f, 0.0f, 1.0f;
+            ball->Set_Model_Matrix(t);
+        }
+
 
         // Update time uniform for all animated objects
         for (auto& mesh_obj : mesh_object_array) {
