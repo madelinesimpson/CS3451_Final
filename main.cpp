@@ -44,6 +44,7 @@ public:
     {
         draw_axes = false;
         startTime = clock();
+
         OpenGLViewer::Initialize();
     }
 
@@ -246,9 +247,24 @@ public:
     }
 
 
-
     virtual void Initialize_Data()
     {
+        bgEffect = Add_Interactive_Object<OpenGLBgEffect>();
+
+        // First load shader INTO the shader library (returns void)
+        OpenGLShaderLibrary::Instance()->Add_Shader_From_File(
+            "shaders/fireworks.vert",
+            "shaders/fireworks.frag",
+            "fireworks"
+        );
+
+        // THEN retrieve the compiled shader program
+        auto shader = OpenGLShaderLibrary::Get_Shader("fireworks");
+
+        // Now add it to your background effect
+        bgEffect->Add_Shader_Program(shader);
+
+        bgEffect->Initialize();
         //// Load shaders
         OpenGLShaderLibrary::Instance()->Add_Shader_From_File("shaders/basic.vert", "shaders/basic.frag", "basic");
         OpenGLShaderLibrary::Instance()->Add_Shader_From_File("shaders/building.vert", "shaders/building.frag", "building");
@@ -264,12 +280,12 @@ public:
         opengl_window->Add_Light(Vector3f(0.0f, 5.0f, -3.0f), Vector3f(0.0f, 0.0f, 0.0f), Vector3f(0.8f, 0.0f, 0.8f), Vector3f(0.8f, 0.5f, 0.8f));
 
 
-        // background - dark gradient
-        {
-            auto bg = Add_Interactive_Object<OpenGLBackground>();
-            bg->Set_Color(OpenGLColor(0.01f, 0.01f, 0.05f, 1.0f), OpenGLColor(0.05f, 0.05f, 0.15f, 1.0f));
-            bg->Initialize();
-        }
+        // // background - dark gradient
+        // {
+        //     auto bg = Add_Interactive_Object<OpenGLBackground>();
+        //     bg->Set_Color(OpenGLColor(0.01f, 0.01f, 0.05f, 1.0f), OpenGLColor(0.05f, 0.05f, 0.15f, 1.0f));
+        //     bg->Initialize();
+        // }
 
         // making ground
         {
@@ -424,8 +440,9 @@ public:
 
         // ball drop
         if (ball) {
-            float dropTime = 5.0f;
-            float cycle = std::fmod(time, dropTime + 2.0f);
+            float dropTime = 8.0f;
+            float pauseTime = 4.0f;
+            float cycle = std::fmod(time, dropTime + pauseTime);
 
             float y_pos;
             if (cycle < dropTime) {
@@ -445,8 +462,8 @@ public:
                 0.0f, 0.0f, 1.0f, -10.0f,
                 0.0f, 0.0f, 0.0f, 1.0f;
             ball->Set_Model_Matrix(t);
-        }
 
+        }
 
         // Update time uniform for all animated objects
         for (auto& mesh_obj : mesh_object_array) {
@@ -455,7 +472,7 @@ public:
 
         if (bgEffect) {
             bgEffect->setResolution((float)Win_Width(), (float)Win_Height());
-            bgEffect->setTime(time);
+            bgEffect->setTime(time * 0.1f);
             bgEffect->setFrame(frame++);
         }
 
